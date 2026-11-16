@@ -3,13 +3,70 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Popover from "@radix-ui/react-popover";
 import {
-  AlertTriangle, ArrowRight, Bell, CheckCheck, FlaskConical, Inbox, MessageSquare,
-  UserCheck,
+  AlertTriangle, ArrowRight, Bell, BellOff, CheckCheck, FlaskConical, Inbox,
+  MessageSquare, UserCheck,
 } from "lucide-react";
 import { notificationApi } from "@/api/services";
 import { queryKeys } from "@/api/queryKeys";
 import { relativeTime } from "@/lib/dates";
+import {
+  canShowNativeNotification, nativeNotificationsEnabled, notifyPermission,
+  requestNotifyPermission, setNativeNotificationsEnabled, showConfirmationNotification,
+} from "@/lib/webNotify";
 import type { NotificationRow } from "@/types";
+
+/** A compact on/off control for native desktop alerts, living in the bell
+ *  popover so it is discoverable right where notifications appear.
+ *
+ *  Three states, because the browser permission is not a simple boolean:
+ *   - "default" (never asked) -> the toggle triggers the real browser prompt.
+ *   - "granted"               -> the toggle flips the in-app mute preference.
+ *   - "denied"                -> we CANNOT re-prompt (a browser rule), so the
+ *                                control is disabled and says how to undo it.
+ */
+function DesktopAlertsToggle() {
+  const [permission, setPermission] = useState(notifyPermission);
+  const [enabled, setEnabled] = useState(() =>
+    canShowNativeNotification() || (permission === "default" && nativeNotificationsEnabled()),
+  );
+
+  const blocked = permission === "denied";
+  const on = permission === "granted" && enabled;
+
+  async function toggle() {
+    if (blocked) return;
+    if (permission === "default") {
+      const result = await requestNotifyPermission();
+      setPermission(result);
+      if (result === "granted") {
+        setNativeNotificationsEnabled(true);
+        setEnabled(true);
+        showConfirmationNotification();
+      }
+      return;
+    }
+    const next = !on;
+    setNativeNotificationsEnabled(next);
+    setEnabled(next);
+  }
+
+  return (
+    <button
+      type="button"
+      className="zt-notif-alerts"
+      onClick={toggle}
+      disabled={blocked}
+      aria-pressed={on}
+      title={blocked
+        ? "Desktop alerts are blocked by your browser. Re-enable them in the site's notification settings."
+        : on ? "Desktop alerts are on" : "Turn on desktop alerts"}
+    >
+      {on ? <Bell className="size-[13px]" aria-hidden /> : <BellOff className="size-[13px]" aria-hidden />}
+      <span>{blocked ? "Alerts blocked" : on ? "Desktop alerts on" : "Desktop alerts off"}</span>
+      <span className={`zt-notif-switch${on ? " on" : ""}`} aria-hidden />
+    </button>
+  );
+}
 
 /** Icon per notification type, so a row is identifiable before it is read. */
 function iconFor(type: string) {
@@ -200,6 +257,7 @@ export function NotificationBell() {
           </div>
 
           <div className="zt-notif-foot">
+            <DesktopAlertsToggle />
             <button type="button" onClick={() => { setOpen(false); navigate("/notifications"); }}>
               View all notifications
             </button>

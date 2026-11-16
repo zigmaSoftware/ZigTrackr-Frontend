@@ -8,6 +8,7 @@ import { dashboardApi } from "@/api/services";
 import { queryKeys } from "@/api/queryKeys";
 import { useInboxSocket } from "@/hooks/useInboxSocket";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { EnableNotificationsBanner } from "@/components/notifications/EnableNotificationsBanner";
 import { useAuth } from "@/features/auth/AuthContext";
 import { Sidebar } from "@/layouts/Sidebar";
 import { Button, IconButton } from "@/components/ui/primitives";
@@ -160,6 +161,8 @@ export function AppLayout() {
               </DropdownMenu.Root>
             </div>
           </header>
+
+          <EnableNotificationsBanner />
 
           <main id="main-content" className="min-w-0 max-w-full flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-5">
             <Outlet />

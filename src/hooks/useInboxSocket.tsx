@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { queryKeys } from "@/api/queryKeys";
 import { playNotificationSound } from "@/lib/notificationSound";
+import { showNativeNotification } from "@/lib/webNotify";
 import { ChatToast, PillToast } from "@/components/notifications/NotificationToast";
 import type { NotificationRow } from "@/types";
 import { useAuth } from "@/features/auth/AuthContext";
@@ -29,6 +30,14 @@ export function useInboxSocket(enabled: boolean) {
     let stopped = false;
     let socket: WebSocket | null = null;
     let retry: number | undefined;
+    /* Consecutive 4403 refusals. The inbox socket authenticates with the
+       short-lived access-token cookie (5 min). When it rotates, the server
+       refuses the socket with 4403 -- which previously killed it for the rest
+       of the session, so live notifications silently stopped a few minutes
+       after login. We now refresh the session and reconnect on 4403, but cap
+       the attempts so a genuinely unauthorized user doesn't loop forever. */
+    let authRetries = 0;
+    const MAX_AUTH_RETRIES = 5;
 
     function refresh() {
       void queryClient.invalidateQueries({ queryKey: ["tickets", "chat-inbox"] });
@@ -58,6 +67,14 @@ export function useInboxSocket(enabled: boolean) {
       // Client-side navigation: a full reload would tear down this very
       // socket and lose any other queued notifications.
       const open = row.link ? () => navigate(row.link) : undefined;
+      /* Native OS popup, but only when this tab is NOT focused. When it is,
+         the in-app toast + chime below already interrupt the user, so a second
+         desktop popup would be redundant noise. The OS popup earns its place
+         precisely when ZigTrackr is in another tab or behind another app --
+         which is the whole point of the feature. */
+      if (document.visibilityState !== "visible" && open) {
+        showNativeNotification(row, open);
+      }
       const isChat = row.notification_type.includes("CHAT");
       // Urgent items stay until dismissed; everything else clears itself.
       const options = { duration: row.is_urgent ? Infinity : 6000 };
@@ -90,17 +107,34 @@ export function useInboxSocket(enabled: boolean) {
           // Malformed frame; the next event or the fallback poll recovers.
         }
       };
+      socket.onopen = () => {
+        // A successful connect clears the auth-retry budget, so a later token
+        // rotation gets its own fresh set of attempts.
+        authRetries = 0;
+      };
       socket.onclose = (event) => {
         if (stopped) return;
-        // 4403 is the server refusing the session: retrying cannot fix that.
-        if (event.code !== 4403) {
+        if (event.code === 4403) {
+          /* The access token almost certainly rotated out from under the
+             socket. Refresh it and reconnect, rather than giving up for the
+             rest of the session. Bounded, so a truly revoked session settles
+             instead of hammering. */
+          if (authRetries >= MAX_AUTH_RETRIES) return;
+          authRetries += 1;
           retry = window.setTimeout(() => {
-            // Counts may have moved while disconnected.
-            refresh();
-            refreshNotifications();
-            connect();
-          }, 5000);
+            void refreshSession().then(() => {
+              if (!stopped) connect();
+            });
+          }, 2000 * authRetries);
+          return;
         }
+        // Any other drop (server bounce, network blip): reconnect and resync.
+        retry = window.setTimeout(() => {
+          // Counts may have moved while disconnected.
+          refresh();
+          refreshNotifications();
+          connect();
+        }, 5000);
       };
     }
 

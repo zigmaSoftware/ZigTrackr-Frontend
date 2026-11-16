@@ -553,12 +553,38 @@
   font-size: 12.5px; color: var(--muted-foreground);
 }
 .zt-notif-foot {
-  padding: 10px; text-align: center; border-top: 1px solid var(--border);
+  padding: 8px 10px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
-.zt-notif-foot button {
+.zt-notif-foot > button {
   border: 0; background: transparent; color: var(--primary);
   font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
 }
+/* Desktop-alerts toggle: a pill with a label and a small switch, reading as a
+   single on/off control rather than a button. */
+.zt-notif-alerts {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: 12px; color: var(--muted-foreground);
+  padding: 4px 2px; border-radius: 8px;
+}
+.zt-notif-alerts:hover:not(:disabled) { color: var(--foreground); }
+.zt-notif-alerts:disabled { cursor: not-allowed; opacity: 0.7; }
+.zt-notif-alerts[aria-pressed="true"] { color: var(--foreground); }
+.zt-notif-switch {
+  width: 26px; height: 15px; border-radius: 999px; flex: none;
+  background: var(--muted-foreground); opacity: 0.4; position: relative;
+  transition: background 0.15s, opacity 0.15s;
+}
+.zt-notif-switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 11px; height: 11px; border-radius: 50%; background: #fff;
+  transition: transform 0.15s;
+}
+.zt-notif-switch.on {
+  background: var(--primary); opacity: 1;
+}
+.zt-notif-switch.on::after { transform: translateX(11px); }
 
 
 /* ---- NOTIFICATION TOASTS ----
